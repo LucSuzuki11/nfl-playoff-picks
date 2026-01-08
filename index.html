@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>NFL Playoff Picks</title>
+  <style>
+    body { font-family: -apple-system, system-ui, Segoe UI, Roboto, Arial; margin: 18px; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 14px; margin: 12px 0; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    input[type="number"], input[type="text"] { padding: 10px; border: 1px solid #ccc; border-radius: 10px; width: 110px; }
+    input[type="text"] { width: 220px; }
+    button { padding: 12px 14px; border: 0; border-radius: 12px; background: #111; color: #fff; font-weight: 600; }
+    .muted { color: #666; font-size: 14px; }
+    .winner { font-weight: 700; }
+    .error { color: #b00020; }
+    .ok { color: #0a7a2f; }
+  </style>
+</head>
+<body>
+  <h2>NFL Playoff Picks</h2>
+  <div class="muted" id="roundLabel"></div>
+
+  <div class="card">
+    <div class="row">
+      <label>
+        Your name<br />
+        <input id="name" type="text" placeholder="Malcolm" />
+      </label>
+      <div class="muted">Scores decide winner automatically.</div>
+    </div>
+  </div>
+
+  <div id="games"></div>
+
+  <button id="submitBtn">Submit Picks</button>
+  <p id="status" class="muted"></p>
+
+  <div class="card" id="nextRoundCard" style="display:none;">
+    <h3 style="margin-top:0;">Next round matchups (preview)</h3>
+    <div id="nextRound"></div>
+    <p class="muted">This is a simple “winner pairs in order” preview for now.</p>
+  </div>
+
+<script>
+  // 1) Paste your Apps Script Web App URL here:
+  const API_URL = "PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
+
+  // 2) Set your round and matchups here (you will change this each round)
+  const ROUND = "Wild Card"; // e.g., "Divisional", "Conference", "Super Bowl"
+  const MATCHUPS = [
+    { matchId: "WC1", teamA: "Bills", teamB: "Steelers" },
+    { matchId: "WC2", teamA: "Chiefs", teamB: "Dolphins" },
+    { matchId: "WC3", teamA: "Texans", teamB: "Browns" },
+    { matchId: "WC4", teamA: "Ravens", teamB: "Bye/Seed" } // you can remove byes if not needed
+  ].filter(m => !/bye/i.test(m.teamB)); // simple bye filter
+
+  document.getElementById("roundLabel").textContent = `Round: ${ROUND}`;
+
+  const gamesEl = document.getElementById("games");
+
+  function winnerFromScores(a, b, teamA, teamB) {
+    if (a > b) return teamA;
+    if (b > a) return teamB;
+    return "TIE";
+  }
+
+  function makeGameCard(m, idx) {
+    const idA = `a_${idx}`, idB = `b_${idx}`, winId = `w_${idx}`;
+    const div = document.createElement("div");
+    div.className = "card";
+    div.innerHTML = `
+      <div><b>${m.teamA}</b> vs <b>${m.teamB}</b></div>
+      <div class="row" style="margin-top:10px;">
+        <label>${m.teamA} score<br><input type="number" min="0" max="99" step="1" id="${idA}" /></label>
+        <label>${m.teamB} score<br><input type="number" min="0" max="99" step="1" id="${idB}" /></label>
+        <div class="muted">Winner: <span class="winner" id="${winId}">—</span></div>
+      </div>
+      <div class="muted">Match ID: ${m.matchId}</div>
+    `;
+    // update winner live
+    const aEl = div.querySelector(`#${idA}`);
+    const bEl = div.querySelector(`#${idB}`);
+    const wEl = div.querySelector(`#${winId}`);
+
+    function update() {
+      const a = Number(aEl.value);
+      const b = Number(bEl.value);
+      if (Number.isFinite(a) && Number.isFinite(b) && aEl.value !== "" && bEl.value !== "") {
+        wEl.textContent = winnerFromScores(a, b, m.teamA, m.teamB);
+      } else {
+        wEl.textContent = "—";
+      }
+    }
+    aEl.addEventListener("input", update);
+    bEl.addEventListener("input", update);
+
+    return div;
+  }
+
+  MATCHUPS.forEach((m, idx) => gamesEl.appendChild(makeGameCard(m, idx)));
+
+  function getPicks() {
+    const picks = [];
+    for (let i = 0; i < MATCHUPS.length; i++) {
+      const m = MATCHUPS[i];
+      const scoreAEl = document.getElementById(`a_${i}`);
+      const scoreBEl = document.getElementById(`b_${i}`);
+      const scoreA = Number(scoreAEl.value);
+      const scoreB = Number(scoreBEl.value);
+
+      if (scoreAEl.value === "" || scoreBEl.value === "") {
+        throw new Error(`Missing score for: ${m.teamA} vs ${m.teamB}`);
+      }
+      if (!Number.isInteger(scoreA) || !Number.isInteger(scoreB) || scoreA < 0 || scoreB < 0 || scoreA > 99 || scoreB > 99) {
+        throw new Error(`Invalid score for: ${m.teamA} vs ${m.teamB}`);
+      }
+      const winner = winnerFromScores(scoreA, scoreB, m.teamA, m.teamB);
+
+      // If you don't allow ties, enforce it here:
+      // if (winner === "TIE") throw new Error(`No ties allowed: ${m.teamA} vs ${m.teamB}`);
+
+      picks.push({
+        matchId: m.matchId,
+        teamA: m.teamA,
+        teamB: m.teamB,
+        scoreA,
+        scoreB,
+        winner
+      });
+    }
+    return picks;
+  }
+
+  function showNextRoundPreview(picks) {
+    const winners = picks.map(p => p.winner).filter(w => w !== "TIE");
+    if (winners.length < 2) return;
+
+    const next = [];
+    for (let i = 0; i < winners.length - 1; i += 2) {
+      next.push(`${winners[i]} vs ${winners[i+1]}`);
+    }
+    if (!next.length) return;
+
+    document.getElementById("nextRoundCard").style.display = "block";
+    document.getElementById("nextRound").innerHTML = next.map(x => `<div>• ${x}</div>`).join("");
+  }
+
+  document.getElementById("submitBtn").addEventListener("click", async () => {
+    const status = document.getElementById("status");
+    status.className = "muted";
+    status.textContent = "";
+
+    try {
+      const name = document.getElementById("name").value.trim();
+      if (!name) throw new Error("Please enter your name.");
+
+      const picks = getPicks();
+
+      status.textContent = "Submitting…";
+
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ round: ROUND, name, picks })
+      });
+
+      const text = await res.text();
+      let json;
+      try { json = JSON.parse(text); } catch { json = { ok: false, error: text }; }
+
+      if (!json.ok) throw new Error(json.error || "Submission failed.");
+
+      status.className = "ok";
+      status.textContent = "Submitted! ✅";
+
+      showNextRoundPreview(picks);
+    } catch (e) {
+      status.className = "error";
+      status.textContent = e.message;
+    }
+  });
+</script>
+</body>
+</html>
