@@ -8,13 +8,14 @@
     body { font-family: -apple-system, system-ui, Segoe UI, Roboto, Arial; margin: 18px; }
     .card { border: 1px solid #ddd; border-radius: 12px; padding: 14px; margin: 12px 0; }
     .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-    input[type="number"], input[type="text"] { padding: 10px; border: 1px solid #ccc; border-radius: 10px; width: 110px; }
-    input[type="text"] { width: 220px; }
+    input[type="number"], input[type="text"] { padding: 10px; border: 1px solid #ccc; border-radius: 10px; }
+    input[type="number"] { width: 110px; }
+    input[type="text"] { width: 240px; }
     button { padding: 12px 14px; border: 0; border-radius: 12px; background: #111; color: #fff; font-weight: 600; }
     .muted { color: #666; font-size: 14px; }
-    .winner { font-weight: 700; }
-    .error { color: #b00020; }
-    .ok { color: #0a7a2f; }
+    .winner { font-weight: 800; }
+    .error { color: #b00020; font-weight: 700; }
+    .ok { color: #0a7a2f; font-weight: 700; }
   </style>
 </head>
 <body>
@@ -25,9 +26,9 @@
     <div class="row">
       <label>
         Your name<br />
-        <input id="name" type="text" placeholder="Name" />
+        <input id="name" type="text" placeholder="Your name" />
       </label>
-      <div class="muted">Scores decide winner automatically.</div>
+      <div class="muted">Winner is auto-decided by scores.</div>
     </div>
   </div>
 
@@ -36,24 +37,28 @@
   <button id="submitBtn">Submit Picks</button>
   <p id="status" class="muted"></p>
 
-  <div class="card" id="nextRoundCard" style="display:none;">
-    <h3 style="margin-top:0;">Next round matchups (preview)</h3>
-    <div id="nextRound"></div>
-    <p class="muted">This is a simple “winner pairs in order” preview for now.</p>
-  </div>
+  <!-- Hidden form POST (avoids CORS + "Failed to fetch") -->
+  <iframe name="hidden_iframe" style="display:none;"></iframe>
+  <form id="postForm" target="hidden_iframe" method="POST" style="display:none;">
+    <input name="round" id="f_round" />
+    <input name="name" id="f_name" />
+    <input name="picks" id="f_picks" />
+  </form>
 
 <script>
-  // 1) Paste your Apps Script Web App URL here:
-  const API_URL = "https://script.google.com/macros/s/AKfycbzDHwwuvOqqlFpSbMvJSBkmAeOT-KVReAwGE2YOOMcHqqT0wCYcBfx4DniZhE6ycxCJ/exec";
+  // ✅ MUST be your Apps Script Web App URL ending in /exec
+  const API_URL = "https://script.google.com/macros/s/AKfycbxrLSgXSBiE5epqFRPPSGeyFnyEZKeuHYBRKtqNyB5b4MOZ4MdI2ggpCOOKoypR-Fr4/exec";
 
-  // 2) Set your round and matchups here (you will change this each round)
-  const ROUND = "Wild Card"; // e.g., "Divisional", "Conference", "Super Bowl"
+  // Change these each round
+  const ROUND = "Wild Card";
   const MATCHUPS = [
     { matchId: "WC1", teamA: "Bills", teamB: "Steelers" },
     { matchId: "WC2", teamA: "Chiefs", teamB: "Dolphins" },
     { matchId: "WC3", teamA: "Texans", teamB: "Browns" },
-    { matchId: "WC4", teamA: "Ravens", teamB: "Bye/Seed" } // you can remove byes if not needed
-  ].filter(m => !/bye/i.test(m.teamB)); // simple bye filter
+    { matchId: "WC4", teamA: "Lions", teamB: "Rams" },
+    { matchId: "WC5", teamA: "Buccaneers", teamB: "Eagles" },
+    { matchId: "WC6", teamA: "Cowboys", teamB: "Packers" }
+  ];
 
   document.getElementById("roundLabel").textContent = `Round: ${ROUND}`;
 
@@ -78,20 +83,21 @@
       </div>
       <div class="muted">Match ID: ${m.matchId}</div>
     `;
-    // update winner live
+
     const aEl = div.querySelector(`#${idA}`);
     const bEl = div.querySelector(`#${idB}`);
     const wEl = div.querySelector(`#${winId}`);
 
     function update() {
+      if (aEl.value === "" || bEl.value === "") {
+        wEl.textContent = "—";
+        return;
+      }
       const a = Number(aEl.value);
       const b = Number(bEl.value);
-      if (Number.isFinite(a) && Number.isFinite(b) && aEl.value !== "" && bEl.value !== "") {
-        wEl.textContent = winnerFromScores(a, b, m.teamA, m.teamB);
-      } else {
-        wEl.textContent = "—";
-      }
+      wEl.textContent = winnerFromScores(a, b, m.teamA, m.teamB);
     }
+
     aEl.addEventListener("input", update);
     bEl.addEventListener("input", update);
 
@@ -106,18 +112,20 @@
       const m = MATCHUPS[i];
       const scoreAEl = document.getElementById(`a_${i}`);
       const scoreBEl = document.getElementById(`b_${i}`);
-      const scoreA = Number(scoreAEl.value);
-      const scoreB = Number(scoreBEl.value);
 
       if (scoreAEl.value === "" || scoreBEl.value === "") {
         throw new Error(`Missing score for: ${m.teamA} vs ${m.teamB}`);
       }
+
+      const scoreA = Number(scoreAEl.value);
+      const scoreB = Number(scoreBEl.value);
+
       if (!Number.isInteger(scoreA) || !Number.isInteger(scoreB) || scoreA < 0 || scoreB < 0 || scoreA > 99 || scoreB > 99) {
         throw new Error(`Invalid score for: ${m.teamA} vs ${m.teamB}`);
       }
-      const winner = winnerFromScores(scoreA, scoreB, m.teamA, m.teamB);
 
-      // If you don't allow ties, enforce it here:
+      const winner = winnerFromScores(scoreA, scoreB, m.teamA, m.teamB);
+      // If you don't allow ties, enforce it:
       // if (winner === "TIE") throw new Error(`No ties allowed: ${m.teamA} vs ${m.teamB}`);
 
       picks.push({
@@ -132,54 +140,38 @@
     return picks;
   }
 
-  function showNextRoundPreview(picks) {
-    const winners = picks.map(p => p.winner).filter(w => w !== "TIE");
-    if (winners.length < 2) return;
-
-    const next = [];
-    for (let i = 0; i < winners.length - 1; i += 2) {
-      next.push(`${winners[i]} vs ${winners[i+1]}`);
-    }
-    if (!next.length) return;
-
-    document.getElementById("nextRoundCard").style.display = "block";
-    document.getElementById("nextRound").innerHTML = next.map(x => `<div>• ${x}</div>`).join("");
-  }
-
-  
-
   document.getElementById("submitBtn").addEventListener("click", () => {
-  const status = document.getElementById("status");
-  status.className = "muted";
-  status.textContent = "";
+    const status = document.getElementById("status");
+    status.className = "muted";
+    status.textContent = "";
 
-  try {
-    const name = document.getElementById("name").value.trim();
-    if (!name) throw new Error("Please enter your name.");
-    const picks = getPicks();
+    try {
+      if (!API_URL.includes("/exec")) {
+        throw new Error("API_URL must be your Apps Script Web App URL ending in /exec");
+      }
 
-    const form = document.getElementById("postForm");
-    form.action = API_URL;
+      const name = document.getElementById("name").value.trim();
+      if (!name) throw new Error("Please enter your name.");
 
-    document.getElementById("f_round").value = ROUND;
-    document.getElementById("f_name").value = name;
-    document.getElementById("f_picks").value = JSON.stringify(picks);
+      const picks = getPicks();
 
-    form.submit();
+      // Fill and submit hidden form (CORS-proof)
+      const form = document.getElementById("postForm");
+      form.action = API_URL;
 
-    status.className = "ok";
-    status.textContent = "Submitted! ✅";
-  } catch (e) {
-    status.className = "error";
-    status.textContent = e.message;
-  }
-});
+      document.getElementById("f_round").value = ROUND;
+      document.getElementById("f_name").value = name;
+      document.getElementById("f_picks").value = JSON.stringify(picks);
+
+      form.submit();
+
+      status.className = "ok";
+      status.textContent = "Submitted! ✅ (Check the Google Sheet)";
+    } catch (e) {
+      status.className = "error";
+      status.textContent = e.message;
+    }
+  });
 </script>
-<iframe name="hidden_iframe" style="display:none;"></iframe>
-<form id="postForm" target="hidden_iframe" method="POST" style="display:none;">
-  <input name="round" id="f_round" />
-  <input name="name" id="f_name" />
-  <input name="picks" id="f_picks" />
-</form>
 </body>
 </html>
