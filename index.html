@@ -39,11 +39,7 @@
 
   <!-- DEBUG VIEW: shows OK or ERROR returned by Apps Script.
        Once it's working, you can hide it by changing style to display:none -->
-  <iframe
-    id="resultFrame"
-    name="resultFrame"
-    style="width:100%; height:120px; border:2px solid #ddd; border-radius:12px;"
-  ></iframe>
+  <iframe name="hidden_iframe" style="display:none;"></iframe>
 
   <!-- Hidden POST form (CORS-proof) -->
   <form id="postForm" target="resultFrame" method="POST" style="display:none;">
