@@ -44,7 +44,7 @@
 
 <script>
   // 1) Paste your Apps Script Web App URL here:
-  const API_URL = "https://script.google.com/macros/s/AKfycbzvx5gc6KvfDIVGn-qCPpMD3J1E-VxBGQuiTjuh24BJbmaEBz2ka9vxuP8kaJK8EdH_/exec";
+  const API_URL = "https://script.google.com/macros/s/AKfycbzDHwwuvOqqlFpSbMvJSBkmAeOT-KVReAwGE2YOOMcHqqT0wCYcBfx4DniZhE6ycxCJ/exec";
 
   // 2) Set your round and matchups here (you will change this each round)
   const ROUND = "Wild Card"; // e.g., "Divisional", "Conference", "Super Bowl"
@@ -146,40 +146,40 @@
     document.getElementById("nextRound").innerHTML = next.map(x => `<div>• ${x}</div>`).join("");
   }
 
-  document.getElementById("submitBtn").addEventListener("click", async () => {
-    const status = document.getElementById("status");
-    status.className = "muted";
-    status.textContent = "";
+  
 
-    try {
-      const name = document.getElementById("name").value.trim();
-      if (!name) throw new Error("Please enter your name.");
+  document.getElementById("submitBtn").addEventListener("click", () => {
+  const status = document.getElementById("status");
+  status.className = "muted";
+  status.textContent = "";
 
-      const picks = getPicks();
+  try {
+    const name = document.getElementById("name").value.trim();
+    if (!name) throw new Error("Please enter your name.");
+    const picks = getPicks();
 
-      status.textContent = "Submitting…";
+    const form = document.getElementById("postForm");
+    form.action = API_URL;
 
-      const res = await fetch(API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ round: ROUND, name, picks })
-      });
+    document.getElementById("f_round").value = ROUND;
+    document.getElementById("f_name").value = name;
+    document.getElementById("f_picks").value = JSON.stringify(picks);
 
-      const text = await res.text();
-      let json;
-      try { json = JSON.parse(text); } catch { json = { ok: false, error: text }; }
+    form.submit();
 
-      if (!json.ok) throw new Error(json.error || "Submission failed.");
-
-      status.className = "ok";
-      status.textContent = "Submitted! ✅";
-
-      showNextRoundPreview(picks);
-    } catch (e) {
-      status.className = "error";
-      status.textContent = e.message;
-    }
-  });
+    status.className = "ok";
+    status.textContent = "Submitted! ✅";
+  } catch (e) {
+    status.className = "error";
+    status.textContent = e.message;
+  }
+});
 </script>
+<iframe name="hidden_iframe" style="display:none;"></iframe>
+<form id="postForm" target="hidden_iframe" method="POST" style="display:none;">
+  <input name="round" id="f_round" />
+  <input name="name" id="f_name" />
+  <input name="picks" id="f_picks" />
+</form>
 </body>
 </html>
