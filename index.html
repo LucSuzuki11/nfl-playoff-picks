@@ -55,12 +55,12 @@
   // Update these each round
   const ROUND = "Wild Card";
   const MATCHUPS = [
-    { matchId: "WC1", teamA: "Bills", teamB: "Steelers" },
-    { matchId: "WC2", teamA: "Chiefs", teamB: "Dolphins" },
-    { matchId: "WC3", teamA: "Texans", teamB: "Browns" },
-    { matchId: "WC4", teamA: "Lions", teamB: "Rams" },
-    { matchId: "WC5", teamA: "Buccaneers", teamB: "Eagles" },
-    { matchId: "WC6", teamA: "Cowboys", teamB: "Packers" }
+    { matchId: "WC1", teamA: "LA Chargers", teamB: "New England Patriots" },
+    { matchId: "WC2", teamA: "Buffalo Bills", teamB: "Jacksonville Jaguars" },
+    { matchId: "WC3", teamA: "Houston Texans", teamB: "Pittsburgh Steelers" },
+    { matchId: "WC4", teamA: "Greenbay Packers", teamB: "Chicago Bears" },
+    { matchId: "WC5", teamA: "San Francisco 49ers", teamB: "Philidelphia Eagles" },
+    { matchId: "WC6", teamA: "LA Rams", teamB: "Carolina Panthers" }
   ];
 
   document.getElementById("roundLabel").textContent = `Round: ${ROUND}`;
@@ -171,7 +171,7 @@
       form.submit();
 
       status.className = "ok";
-      status.textContent = "Submitted ✅ (see box below for OK/ERROR)";
+      status.textContent = "Submitted ✅";
     } catch (e) {
       status.className = "error";
       status.textContent = e.message;
