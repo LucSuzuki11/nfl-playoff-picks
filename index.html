@@ -48,9 +48,34 @@
     <textarea name="picks" id="f_picks"></textarea>
   </form>
 
+  <section id="leaderboard" style="margin-top:18px;">
+  <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+    <h2 style="margin:0;">Leaderboard</h2>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button id="refreshLbBtn" type="button" style="padding:10px 12px; border-radius:12px;">Refresh</button>
+      <div id="lbStatus" class="muted"></div>
+    </div>
+  </div>
+
+  <div style="margin-top:10px; overflow:auto; border:1px solid var(--border); border-radius:14px;">
+    <table id="lbTable" style="width:100%; border-collapse:collapse; min-width:420px;">
+      <thead>
+        <tr>
+          <th style="text-align:left; padding:10px; border-bottom:1px solid var(--border);">Rank</th>
+          <th style="text-align:left; padding:10px; border-bottom:1px solid var(--border);">Name</th>
+          <th style="text-align:left; padding:10px; border-bottom:1px solid var(--border);">Correct</th>
+          <th style="text-align:left; padding:10px; border-bottom:1px solid var(--border);">Score</th>
+          <th style="text-align:left; padding:10px; border-bottom:1px solid var(--border);">Updated</th>
+        </tr>
+      </thead>
+      <tbody id="lbBody"></tbody>
+    </table>
+  </div>
+</section>
+
 <script>
   // Your Apps Script Web App URL (must end in /exec)
-  const API_URL = "https://script.google.com/macros/s/AKfycbwR6PtVxai9gRDsVyje_Ym56frF9ZzN0wmhXI8nGqIS5DvJH63-y7ETYYYE3IoctlVg/exec";
+  const API_URL = "https://script.google.com/macros/s/AKfycbxMFZyXBzvDM7hCvZCSs1fe1nFUaZIdnqA3meo6r-K4hpW-tYkoLCIw5qumix35cMy_/exec";
 
   // Update these each round
   const ROUND = "Wild Card";
@@ -176,6 +201,88 @@
       status.className = "error";
       status.textContent = e.message;
     }
+  });
+</script>
+<script>
+  function loadLeaderboard() {
+    const status = document.getElementById("lbStatus");
+    if (!status) return;
+
+    status.textContent = "Loading…";
+
+    // JSONP callback name must be unique to avoid caching collisions
+    const cb = "lb_cb_" + Math.random().toString(16).slice(2);
+
+    window[cb] = function(payload) {
+      try {
+        delete window[cb];
+
+        if (!payload || !payload.ok) {
+          status.textContent = payload?.error ? `Error: ${payload.error}` : "Error loading leaderboard";
+          return;
+        }
+
+        const rows = payload.rows || [];
+
+        // Normalize/Sort: highest Score first; tie-break by Correct
+        rows.sort((a,b)=>{
+          const sA = Number(a.Score ?? 0), sB = Number(b.Score ?? 0);
+          if (sB !== sA) return sB - sA;
+          const cA = Number(a.Correct ?? 0), cB = Number(b.Correct ?? 0);
+          return cB - cA;
+        });
+
+        const body = document.getElementById("lbBody");
+        body.innerHTML = "";
+
+        rows.forEach((r, i)=>{
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td style="padding:10px; border-bottom:1px solid var(--border);">${i+1}</td>
+            <td style="padding:10px; border-bottom:1px solid var(--border);">${escapeHtml(String(r.Name ?? ""))}</td>
+            <td style="padding:10px; border-bottom:1px solid var(--border);">${escapeHtml(String(r.Correct ?? ""))}</td>
+            <td style="padding:10px; border-bottom:1px solid var(--border); font-weight:800;">${escapeHtml(String(r.Score ?? ""))}</td>
+            <td style="padding:10px; border-bottom:1px solid var(--border); color:var(--muted);">${escapeHtml(String(r.Updated ?? ""))}</td>
+          `;
+          body.appendChild(tr);
+        });
+
+        status.textContent = rows.length ? `Updated (${rows.length} players)` : "No rows yet";
+      } catch (err) {
+        status.textContent = "Error rendering leaderboard";
+      }
+    };
+
+    // Create a script tag to load JSONP
+    const s = document.createElement("script");
+    s.src = `${API_URL}?action=leaderboard&callback=${cb}&_=${Date.now()}`;
+    s.onerror = () => { status.textContent = "Failed to load leaderboard"; };
+    document.body.appendChild(s);
+
+    // Cleanup script tag after load
+    s.onload = () => { setTimeout(()=> s.remove(), 250); };
+  }
+
+  // tiny sanitizer for table cells
+  function escapeHtml(str){
+    return str
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+
+  // hook up button + auto refresh every 60s
+  document.addEventListener("DOMContentLoaded", ()=>{
+    const btn = document.getElementById("refreshLbBtn");
+    if (btn) btn.addEventListener("click", loadLeaderboard);
+
+    // initial load
+    loadLeaderboard();
+
+    // refresh every 60 seconds (optional)
+    setInterval(loadLeaderboard, 60000);
   });
 </script>
 </body>
